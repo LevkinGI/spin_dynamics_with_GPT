@@ -562,13 +562,10 @@ def download_hfix(n_clicks, H, store, material):
         raise PreventUpdate
     def _make_hfix_npy(H, p, material):
         """Возвращает bytes содержимого .npy для фиксированного H."""
-        chi_scale = 10 ** p.chi_scale
-        k_scale   = 10 ** p.k_scale
-        m_scale   = 10 ** p.m_scale
         T_vals  = T_vals_1 if material == '1' else T_vals_2
-        m_vec   = m_scale * (m_array_1 if material == '1' else m_array_2)
-        chi_vec = chi_scale * (chi_array_1 if material == '1' else chi_array_2)
-        K_vec   = k_scale * (K_array_1 if material == '1' else K_array_2)
+        m_vec   = p.m_scale * (m_array_1 if material == '1' else m_array_2)
+        chi_vec = p.chi_scale * (chi_array_1 if material == '1' else chi_array_2)
+        K_vec   = p.k_scale * (K_array_1 if material == '1' else K_array_2)
     
         f1, f2 = compute_frequencies_H_fix(H, m_vec, chi_vec, K_vec, gamma)
         arr = np.vstack([T_vals, f1, f2])           # shape (3, N)
@@ -595,15 +592,12 @@ def download_tfix(n_clicks, T, store, material):
         raise PreventUpdate
     def _make_tfix_npy(T, p, material):
         """Возвращает bytes содержимого .npy для фиксированной T."""
-        chi_scale = 10 ** p.chi_scale
-        k_scale   = 10 ** p.k_scale
-        m_scale   = 10 ** p.m_scale
         H_vec = H_vals
         # индексы и скаляры при выбранной температуре
         t_idx   = np.abs((T_vals_1 if material == '1' else T_vals_2) - T).argmin()
-        m_val   = m_scale * (m_array_1 if material == '1' else m_array_2)[t_idx]
-        chi_val = chi_scale * (chi_array_1 if material == '1' else chi_array_2)[t_idx]
-        K_val   = k_scale * (K_array_1  if material == '1' else K_array_2)[t_idx]
+        m_val   = p.m_scale * (m_array_1 if material == '1' else m_array_2)[t_idx]
+        chi_val = p.chi_scale * (chi_array_1 if material == '1' else chi_array_2)[t_idx]
+        K_val   = p.k_scale * (K_array_1  if material == '1' else K_array_2)[t_idx]
     
         f1, f2 = compute_frequencies_T_fix(H_vec, m_val, chi_val, K_val, gamma)
         arr = np.vstack([H_vec, f1, f2])            # shape (3, N)
