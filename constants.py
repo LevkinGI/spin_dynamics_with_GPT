@@ -44,7 +44,7 @@ def _chi(m, M):
 # Загрузка данных
 m_array = np.load('m_array_18.07.2025.npy')
 M_array = np.load('M_array_18.07.2025.npy')
-K_array = K_T(T_vals_1)
+K_array = K_T(T_vals)
 
 def compute_frequencies(H_mesh, m_mesh, M_mesh, K_mesh, gamma, alpha):
     abs_m = np.abs(m_mesh)
