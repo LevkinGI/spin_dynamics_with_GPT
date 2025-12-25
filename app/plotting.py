@@ -18,26 +18,27 @@ MARKER_SIZE = 9
 class SeriesData:
     name: str
     axis_label: str
-    axis_values: np.ndarray
+    exp_axis: np.ndarray
     experimental_lf: np.ndarray
     experimental_hf: np.ndarray
     experimental_lf_tau: np.ndarray
     experimental_hf_tau: np.ndarray
+    model_axis: np.ndarray
     model_lf: np.ndarray
     model_hf: np.ndarray
     model_lf_tau: np.ndarray
     model_hf_tau: np.ndarray
 
 
-def _scatter_pair(fig, row: int, col: int, axis, model, exp, label_base: str, color: str):
+def _scatter_pair(fig, row: int, col: int, model_axis, model, exp_axis, exp, label_base: str, color: str):
     fig.add_trace(
-        go.Scatter(x=axis, y=model, mode="lines", line=dict(width=2, color=color), name=f"{label_base} model"),
+        go.Scatter(x=model_axis, y=model, mode="lines", line=dict(width=2, color=color), name=f"{label_base} model"),
         row=row,
         col=col,
     )
     fig.add_trace(
         go.Scatter(
-            x=axis,
+            x=exp_axis,
             y=exp,
             mode="markers",
             marker=dict(size=MARKER_SIZE, color=color, line=dict(width=1, color="#000000")),
@@ -70,11 +71,12 @@ def build_summary_figure(series: Sequence[SeriesData]):
     )
 
     for idx, s in enumerate(series, start=1):
-        axis = s.axis_values
-        _scatter_pair(fig, 1, idx, axis, s.model_lf, s.experimental_lf, "f_LF", FIT_LF)
-        _scatter_pair(fig, 1, idx, axis, s.model_hf, s.experimental_hf, "f_HF", FIT_HF)
-        _scatter_pair(fig, 2, idx, axis, s.model_lf_tau, s.experimental_lf_tau, "tau_LF", FIT_LF)
-        _scatter_pair(fig, 2, idx, axis, s.model_hf_tau, s.experimental_hf_tau, "tau_HF", FIT_HF)
+        exp_axis = s.exp_axis
+        model_axis = s.model_axis
+        _scatter_pair(fig, 1, idx, model_axis, s.model_lf, exp_axis, s.experimental_lf, "f_LF", FIT_LF)
+        _scatter_pair(fig, 1, idx, model_axis, s.model_hf, exp_axis, s.experimental_hf, "f_HF", FIT_HF)
+        _scatter_pair(fig, 2, idx, model_axis, s.model_lf_tau, exp_axis, s.experimental_lf_tau, "tau_LF", FIT_LF)
+        _scatter_pair(fig, 2, idx, model_axis, s.model_hf_tau, exp_axis, s.experimental_hf_tau, "tau_HF", FIT_HF)
 
         fig.update_xaxes(title_text=s.axis_label, row=2, col=idx)
         for row in (1, 2):

@@ -32,7 +32,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = BASE_DIR / "data"
-TAU_WEIGHT_FALLBACK = 0.2
+TAU_WEIGHT_FALLBACK = 0.1
 logger = logging.getLogger(__name__)
 
 
@@ -227,11 +227,21 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
     series: List[SeriesData] = []
 
     for dataset in parsed_series:
-        H_values = np.array([obs.H for obs in dataset.observations], dtype=float)
-        T_values = np.array([obs.T for obs in dataset.observations], dtype=float)
+        H_values_exp = np.array([obs.H for obs in dataset.observations], dtype=float)
+        T_values_exp = np.array([obs.T for obs in dataset.observations], dtype=float)
+
+        # сетка для модели
+        if dataset.axis_label.startswith("H"):
+            model_axis = H_VALS
+            H_values_model = H_VALS
+            T_values_model = np.full_like(H_VALS, T_values_exp[0])
+        else:
+            model_axis = T_VALS
+            T_values_model = T_VALS
+            H_values_model = np.full_like(T_VALS, H_values_exp[0])
 
         model_lf, model_hf, model_lf_tau, model_hf_tau = _evaluate_axis(
-            H_values=H_values, T_values=T_values, params=params
+            H_values=H_values_model, T_values=T_values_model, params=params
         )
 
         if not _all_finite(model_lf, model_hf, model_lf_tau, model_hf_tau):
@@ -241,11 +251,12 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
             SeriesData(
                 name=dataset.name,
                 axis_label=dataset.axis_label,
-                axis_values=dataset.axis_values,
+                exp_axis=dataset.axis_values,
                 experimental_lf=dataset.exp_f_lf,
                 experimental_hf=dataset.exp_f_hf,
                 experimental_lf_tau=dataset.exp_tau_lf,
                 experimental_hf_tau=dataset.exp_tau_hf,
+                model_axis=model_axis,
                 model_lf=model_lf,
                 model_hf=model_hf,
                 model_lf_tau=model_lf_tau,
