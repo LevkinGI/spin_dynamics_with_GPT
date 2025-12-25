@@ -157,7 +157,15 @@ def _residual_vector(param_array: np.ndarray, observations: Sequence[Observation
     residuals: list[float] = []
 
     for obs in observations:
-        (f_lf, tau_lf), (f_hf, tau_hf) = _predict_single_point(obs.H, obs.T, params)
+        try:
+            (f_lf, tau_lf), (f_hf, tau_hf) = _predict_single_point(obs.H, obs.T, params)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Пропуск точки (H=%.3f, T=%.3f): ошибка модели: %s", obs.H, obs.T, exc)
+            continue
+
+        if not _all_finite(f_lf, tau_lf, f_hf, tau_hf):
+            logger.warning("Пропуск точки (H=%.3f, T=%.3f): нечисловой результат модели", obs.H, obs.T)
+            continue
 
         _append_residual(residuals, f_lf, obs.f_lf, obs.err_f_lf, weight=1.0)
         _append_residual(residuals, f_hf, obs.f_hf, obs.err_f_hf, weight=1.0)
@@ -176,6 +184,8 @@ def _append_residual(
     weight: float,
 ) -> None:
     if exp_value is None:
+        return
+    if not np.isfinite(model_value):
         return
     if sigma is not None and sigma > 0:
         residuals.append((model_value - exp_value) / sigma)
@@ -214,6 +224,9 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
         model_lf, model_hf, model_lf_tau, model_hf_tau = _evaluate_axis(
             H_values=H_values, T_values=T_values, params=params
         )
+
+        if not _all_finite(model_lf, model_hf, model_lf_tau, model_hf_tau):
+            logger.warning("Серия %s: обнаружены нечисловые значения модели, они будут показаны как NaN", dataset.name)
 
         series.append(
             SeriesData(
@@ -363,13 +376,21 @@ def _to_float_array(series: pd.Series | Sequence) -> np.ndarray:
     return arr
 
 
+def _all_finite(*values: np.ndarray | float) -> bool:
+    return all(np.all(np.isfinite(v)) for v in values)
+
+
 def _evaluate_axis(H_values: Iterable[float], T_values: Iterable[float], params: ModelParameters):
     H_values = np.asarray(H_values, dtype=float)
     T_values = np.asarray(T_values, dtype=float)
     lf_freq, hf_freq = [], []
     lf_tau, hf_tau = [], []
     for H, T in zip(H_values, T_values):
-        (f_lf, tau_lf), (f_hf, tau_hf) = _predict_single_point(float(H), float(T), params)
+        try:
+            (f_lf, tau_lf), (f_hf, tau_hf) = _predict_single_point(float(H), float(T), params)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("Серия: пропуск точки (H=%.3f, T=%.3f) из-за ошибки модели: %s", H, T, exc)
+            f_lf = f_hf = tau_lf = tau_hf = np.nan
         lf_freq.append(f_lf)
         hf_freq.append(f_hf)
         lf_tau.append(tau_lf)
@@ -385,7 +406,7 @@ def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
     """
     idx = np.argmin(np.abs(T_VALS - temperature))
     if not np.isclose(T_VALS[idx], temperature, atol=1e-6):
-        raise ValueError(f"Температура {temperature} K отсутствует в сетке T_VALS.")
+        logger.warning("Температура %.3f K отсутствует в сетке T_VALS, взят ближайший узел %.3f K", temperature, T_VALS[idx])
     return float(m_ARRAY[idx]), float(M_ARRAY[idx]), float(K_ARRAY[idx])
 
 
