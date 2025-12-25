@@ -173,6 +173,10 @@ def _residual_vector(param_array: np.ndarray, observations: Sequence[Observation
         _append_residual(residuals, tau_lf, obs.tau_lf, obs.err_tau_lf, weight=TAU_WEIGHT_FALLBACK)
         _append_residual(residuals, tau_hf, obs.tau_hf, obs.err_tau_hf, weight=TAU_WEIGHT_FALLBACK)
 
+    if not residuals:
+        logger.error("Ни одной валидной невязки не осталось: все точки отброшены.")
+        residuals.append(1e6)  # штраф, чтобы least_squares не падал на пустом векторе
+
     return np.asarray(residuals, dtype=float)
 
 
@@ -201,6 +205,10 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     bounds = ([0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
+    res0 = _residual_vector(p0, observations)
+    if res0.size == 0 or not np.all(np.isfinite(res0)):
+        raise ValueError("Ни одной валидной невязки для начальной точки; проверьте входные данные.")
+
     solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations,), method="trf")
     best = ModelParameters.from_array(solution.x)
     logger.info(
