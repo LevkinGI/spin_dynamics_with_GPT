@@ -20,6 +20,7 @@ from scipy.optimize import least_squares
 from .constants import (
     ALPHA_DEFAULT,
     GAMMA,
+    H_VALS,
     K_ARRAY,
     SUM_MAG_ARRAY,
     T_VALS,
@@ -432,19 +433,23 @@ def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
 
 def main(data_dir: str | None = None) -> None:
     configure_logging()
-    best, parsed_series = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
-    logger.info(
-        "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, alpha=%.6f",
-        best.k_M,
-        best.k_m,
-        best.k_K,
-        best.alpha,
-    )
+    try:
+        best, parsed_series = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
+        logger.info(
+            "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, alpha=%.6f",
+            best.k_M,
+            best.k_m,
+            best.k_K,
+            best.alpha,
+        )
 
-    series = _prepare_series(best, parsed_series)
-    fig = build_summary_figure(series)
-    fig.show()
-    logger.info("Готово. График открыт в браузере.")
+        series = _prepare_series(best, parsed_series)
+        fig = build_summary_figure(series)
+        fig.show()
+        logger.info("Готово. График открыт в браузере.")
+    except Exception as exc:  # noqa: BLE001
+        logger.exception("Критическая ошибка выполнения: %s", exc)
+        raise
 
 
 if __name__ == "__main__":
