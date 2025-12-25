@@ -91,10 +91,10 @@ def chi(m: np.ndarray, M: np.ndarray) -> np.ndarray:
 
 
 # загружаем материалы из файлов
-M_ARRAY = np.load(DATA_DIR / "M_array_18.07.2025.npy")
-M_ARRAY = M_ARRAY.astype(float)
-m_ARRAY = np.load(DATA_DIR / "m_array_18.07.2025.npy")
-m_ARRAY = m_ARRAY.astype(float)
+SUM_MAG_ARRAY = np.load(DATA_DIR / "sum_magnetizations.npy")
+SUM_MAG_ARRAY = SUM_MAG_ARRAY.astype(float)
+DIFF_MAG_ARRAY = np.load(DATA_DIR / "diff_magnetizations.npy")
+DIFF_MAG_ARRAY = DIFF_MAG_ARRAY.astype(float)
 K_ARRAY = k_T(T_VALS)
 
 
@@ -161,8 +161,8 @@ __all__ = [
     "T_VALS",
     "T_INIT",
     # материалы
-    "M_ARRAY",
-    "m_ARRAY",
+    "SUM_MAG_ARRAY",
+    "DIFF_MAG_ARRAY",
     "K_ARRAY",
     # константы
     "GAMMA",

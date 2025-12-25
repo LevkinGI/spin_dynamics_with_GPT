@@ -15,9 +15,9 @@ def test_paths_and_arrays_load():
     # Базовый каталог должен быть родителем пакета app
     assert constants.BASE_DIR.is_dir()
     # Данные m/M должны быть считаны и конечны
-    assert constants.m_ARRAY.shape == constants.M_ARRAY.shape
-    assert (constants.m_ARRAY == constants.m_ARRAY).all()
-    assert (constants.M_ARRAY == constants.M_ARRAY).all()
+    assert constants.DIFF_MAG_ARRAY.shape == constants.SUM_MAG_ARRAY.shape
+    assert (constants.DIFF_MAG_ARRAY == constants.DIFF_MAG_ARRAY).all()
+    assert (constants.SUM_MAG_ARRAY == constants.SUM_MAG_ARRAY).all()
 
 
 def test_logs_and_data_dirs():

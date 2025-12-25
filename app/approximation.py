@@ -21,10 +21,10 @@ from .constants import (
     ALPHA_DEFAULT,
     GAMMA,
     K_ARRAY,
-    M_ARRAY,
+    SUM_MAG_ARRAY,
     T_VALS,
     compute_frequencies,
-    m_ARRAY,
+    DIFF_MAG_ARRAY,
 )
 from .plotting import SeriesData, build_summary_figure
 
@@ -416,7 +416,7 @@ def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
     idx = np.argmin(np.abs(T_VALS - temperature))
     if not np.isclose(T_VALS[idx], temperature, atol=1e-6):
         logger.warning("Температура %.3f K отсутствует в сетке T_VALS, взят ближайший узел %.3f K", temperature, T_VALS[idx])
-    return float(m_ARRAY[idx]), float(M_ARRAY[idx]), float(K_ARRAY[idx])
+    return float(DIFF_MAG_ARRAY[idx]), float(SUM_MAG_ARRAY[idx]), float(K_ARRAY[idx])
 
 
 def main(data_dir: str | None = None) -> None:
