@@ -10,6 +10,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import logging
 from typing import Iterable, List, Sequence, Tuple
 
 import numpy as np
@@ -27,8 +28,29 @@ from constants import (
 )
 from plotting import SeriesData, build_summary_figure
 
+LOG_DIR = Path(__file__).parent / "logs"
+LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = Path(__file__).parent / "data"
 TAU_WEIGHT_FALLBACK = 0.2
+logger = logging.getLogger(__name__)
+
+
+def configure_logging() -> None:
+    """Настройка логирования в файл и консоль (append)."""
+    LOG_DIR.mkdir(parents=True, exist_ok=True)
+    if logger.handlers:
+        return  # уже настроено
+
+    formatter = logging.Formatter(fmt="%(asctime)s [%(levelname)s] %(message)s", datefmt="%Y-%m-%d %H:%M:%S")
+    file_handler = logging.FileHandler(LOG_FILE, mode="a", encoding="utf-8")
+    file_handler.setFormatter(formatter)
+
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+
+    logger.setLevel(logging.INFO)
+    logger.addHandler(file_handler)
+    logger.addHandler(console_handler)
 
 
 @dataclass
@@ -106,15 +128,19 @@ def _build_observations_and_series(data_dir: Path) -> Tuple[List[Observation], L
 
     files = sorted(list(data_dir.glob("*.xlsx")) + list(data_dir.glob("*.xls")))
     if not files:
+        logger.error("В каталоге %s не найдено Excel-файлов (*.xlsx / *.xls).", data_dir)
         raise FileNotFoundError(f"В каталоге {data_dir} не найдено Excel-файлов (*.xlsx / *.xls).")
 
     for path in files:
+        logger.info("Чтение файла %s", path.name)
         parsed = _parse_excel_table(path)
         observations.extend(parsed.observations)
         series_list.append(parsed)
 
     if not observations:
+        logger.error("Не удалось собрать ни одной экспериментальной точки.")
         raise RuntimeError("Не удалось собрать ни одной экспериментальной точки.")
+    logger.info("Собрано %d экспериментальных точек из %d файлов", len(observations), len(files))
     return observations, series_list
 
 
@@ -163,8 +189,19 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
     bounds = ([0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 0.05])
 
+    logger.info("Запуск подбора параметров: p0=%s", p0)
     solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations,), method="trf")
-    return ModelParameters.from_array(solution.x), parsed_series
+    best = ModelParameters.from_array(solution.x)
+    logger.info(
+        "Подбор завершён: k_M=%.5f, k_m=%.5f, k_K=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
+        best.k_M,
+        best.k_m,
+        best.k_K,
+        best.alpha,
+        solution.cost,
+        solution.nfev,
+    )
+    return best, parsed_series
 
 
 def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSeries]) -> List[SeriesData]:
@@ -216,6 +253,7 @@ def _parse_excel_table(path: Path) -> ParsedSeries:
 
     fixed_type, fixed_value = _parse_filename(path.name)
     axis_label = "H (Oe)" if fixed_type == "T" else "T (K)"
+    logger.info("Файл %s: фиксировано %s = %s, точек на оси: %d", path.name, fixed_type, fixed_value, len(axis_values))
 
     rows_map = _extract_rows(df.iloc[1:, :])
     if rows_map.get("f_lf") is None and rows_map.get("f_hf") is None:
@@ -249,6 +287,13 @@ def _parse_excel_table(path: Path) -> ParsedSeries:
             )
         )
 
+    logger.info(
+        "Файл %s: считано точек %d (f_lf: %s, f_hf: %s)",
+        path.name,
+        len(observations),
+        "да" if rows_map.get("f_lf") is not None else "нет",
+        "да" if rows_map.get("f_hf") is not None else "нет",
+    )
     return ParsedSeries(
         name=path.stem,
         axis_label=axis_label,
@@ -345,13 +390,20 @@ def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
 
 
 def main(data_dir: str | None = None) -> None:
+    configure_logging()
     best, parsed_series = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
-    print(f"Оптимальные параметры: k_M={best.k_M:.4f}, k_m={best.k_m:.4f}, k_K={best.k_K:.4f}, alpha={best.alpha:.6f}")
+    logger.info(
+        "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, alpha=%.6f",
+        best.k_M,
+        best.k_m,
+        best.k_K,
+        best.alpha,
+    )
 
     series = _prepare_series(best, parsed_series)
     fig = build_summary_figure(series)
     fig.show()
-    print("Готово. График открыт в браузере.")
+    logger.info("Готово. График открыт в браузере.")
 
 
 if __name__ == "__main__":
