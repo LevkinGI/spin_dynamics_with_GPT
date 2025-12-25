@@ -32,8 +32,6 @@ T_init = 293
 
 gamma = 1.76e7              # рад/(с·Oe)
 alpha = 1e-3
-h_IFE = 7500                # Ое
-delta_t = 250e-15           # с
 
 def _K_T(T):
     return 0.522 * (T - 370)**2
@@ -104,7 +102,7 @@ __all__ = [
     # исходные одномерные массивы (нужны графикам)
     'm_array', 'M_array', 'K_array',
     # физические константы
-    'gamma', 'alpha', 'h_IFE', 'delta_t',
+    'gamma', 'alpha',
     # функции
     'compute_frequencies', 'compute_phases',
     # частоты
