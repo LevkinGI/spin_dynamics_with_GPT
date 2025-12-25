@@ -1,5 +1,6 @@
 # constants.py
 import numpy as np
+from numba import njit
 
 # Данные
 T_293 = np.array([[1000, 1200, 1400, 1600, 1800, 2000],
