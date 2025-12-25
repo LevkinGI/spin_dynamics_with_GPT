@@ -17,7 +17,7 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
 
-from constants import (
+from .constants import (
     ALPHA_DEFAULT,
     GAMMA,
     K_ARRAY,
@@ -26,11 +26,12 @@ from constants import (
     compute_frequencies,
     m_ARRAY,
 )
-from plotting import SeriesData, build_summary_figure
+from .plotting import SeriesData, build_summary_figure
 
-LOG_DIR = Path(__file__).parent / "logs"
+BASE_DIR = Path(__file__).resolve().parent.parent
+LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
-DATA_DIR = Path(__file__).parent / "data"
+DATA_DIR = BASE_DIR / "data"
 TAU_WEIGHT_FALLBACK = 0.2
 logger = logging.getLogger(__name__)
 

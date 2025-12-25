@@ -71,7 +71,8 @@ T_INIT = 293.0
 GAMMA = 1.76e7  # рад/(с·Oe)
 ALPHA_DEFAULT = 1e-3
 
-DATA_DIR = Path(__file__).parent
+BASE_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = BASE_DIR
 
 
 def k_T(temperature: Iterable[float] | float) -> np.ndarray:
