@@ -1,6 +1,5 @@
 # constants.py
 import numpy as np
-from numba import njit, prange
 
 # Данные
 T_293 = np.array([[1000, 1200, 1400, 1600, 1800, 2000],
@@ -24,21 +23,19 @@ H_1000 = np.array([[293, 298, 302, 308, 313, 318, 323, 328, 333],
                    [0.2326714,  0.1817891,  0.2213582,  0.1589079,  0.1216706,  0.06683201, 0.05,      0.3449964, 5],
                    [0.01385995, 0.01945772, 0.01818895, 0.01542324, 0.05003418, 0.1779732,  0.1140494, 0.1139074, 0.09414091]])
 
-# Исходные параметры (Материал 1)
+# Исходные параметры
 H_step = 10
 H_lim = 4000
 H_vals = np.arange(0, H_lim + 1, H_step)
-T_vals_1 = np.linspace(290, 350, 601)
-T_vals_2 = np.linspace(290, 350, 61)
+T_vals = np.linspace(290, 350, 601)
 T_init = 293
 
 gamma = 1.76e7              # рад/(с·Oe)
-alpha_1 = 1e-3
-alpha_2 = 1.7e-2
+alpha = 1e-3
 h_IFE = 7500                # Ое
 delta_t = 250e-15           # с
 
-# Функции, зависящие от температуры (Материал 1)
+# Функции, зависящие от температуры
 @njit(cache=False)
 def K_T(T):
     return 0.525 * (T - 370)**2
@@ -47,21 +44,11 @@ def K_T(T):
 def chi_T(T):
     return 4.2e-7 * np.abs(T - 358)
 
-# Загрузка данных для материала 1
-m_array_1 = np.load('m_array_18.07.2025.npy')
-M_array_1 = np.load('M_array_18.07.2025.npy')
-chi_array_1 = chi_T(T_vals_1) if False else np.full_like(m_array_1, 8e-5) * 3.3
-K_array_1 = K_T(T_vals_1)
-
-# Альтернативные данные для Материала 2
-m_array_2 = np.load('m_array_2.npy')
-M_array_2 = np.load('M_array_2.npy')
-
-# Для материала 2 зависимости K(T) и chi(T) заменяем константами
-chi_const = 3.7e-4
-K_const = 13500
-chi_array_2 = np.full_like(m_array_2, chi_const)
-K_array_2 = np.full_like(m_array_2, K_const)
+# Загрузка данных
+m_array = np.load('m_array_18.07.2025.npy')
+M_array = np.load('M_array_18.07.2025.npy')
+chi_array = chi_T(T_vals_1) if False else np.full_like(m_array, 8e-5) * 3.3
+K_array = K_T(T_vals_1)
 
 def compute_frequencies(H_mesh, m_mesh, M_mesh, chi_mesh, K_mesh, gamma, alpha):
     abs_m = np.abs(m_mesh)
@@ -92,26 +79,19 @@ def compute_frequencies(H_mesh, m_mesh, M_mesh, chi_mesh, K_mesh, gamma, alpha):
     return (f1, t1), (f2, t2)
 
 # Вычисление частот
-# --- FeFe ---
-H_mesh_1, m_mesh_1 = np.meshgrid(H_vals, m_array_1)
-_, M_mesh_1 = np.meshgrid(H_vals, M_array_1)
-_, chi_mesh_1 = np.meshgrid(H_vals, chi_array_1)
-_, K_mesh_1 = np.meshgrid(H_vals, K_array_1)
+H_mesh, m_mesh = np.meshgrid(H_vals, m_array)
+_, M_mesh = np.meshgrid(H_vals, M_array)
+_, chi_mesh = np.meshgrid(H_vals, chi_array)
+_, K_mesh = np.meshgrid(H_vals, K_array)
 
 (f1_GHz, _), (f2_GHz, _) = compute_frequencies(
-        H_mesh_1,
-        m_mesh_1,
-        M_mesh_1,
-        chi_mesh_1,
-        K_mesh_1,
+        H_mesh,
+        m_mesh,
+        M_mesh,
+        chi_mesh,
+        K_mesh,
         gamma,
-        alpha_1)
-
-# --- GdFe ---
-H_mesh_2, m_mesh_2 = np.meshgrid(H_vals, m_array_2)
-_, M_mesh_2 = np.meshgrid(H_vals, M_array_2)
-_, chi_mesh_2 = np.meshgrid(H_vals, chi_array_2)
-_, K_mesh_2 = np.meshgrid(H_vals, K_array_2)
+        alpha)
 
 def compute_phases(H_mesh, m_mesh, K_mesh, chi_mesh):
     abs_m = np.abs(m_mesh)
@@ -123,14 +103,12 @@ def compute_phases(H_mesh, m_mesh, K_mesh, chi_mesh):
 
 __all__ = [
     # сетки и оси
-    'H_vals', 'T_vals_1', 'T_vals_2', 'T_init',
+    'H_vals', 'T_vals',, 'T_init',
     # исходные одномерные массивы (нужны графикам)
-    'm_array_1', 'M_array_1', 'm_array_2', 'M_array_2',
-    'chi_array_1', 'K_array_1', 'chi_array_2', 'K_array_2',
+    'm_array', 'M_array', 'chi_array', 'K_array',
     # физические константы
-    'gamma', 'alpha_1', 'alpha_2', 'K_const', 'chi_const',
-    'h_IFE', 'delta_t',
-    # JIT-функция для частот
+    'gamma', 'alpha', 'h_IFE', 'delta_t',
+    # функции
     'compute_frequencies', 'compute_phases',
     # частоты
     'f1_GHz', 'f2_GHz',
