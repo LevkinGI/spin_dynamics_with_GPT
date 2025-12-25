@@ -1,6 +1,5 @@
 # constants.py
 import numpy as np
-from numba import njit
 
 # Данные
 T_293 = np.array([[1000, 1200, 1400, 1600, 1800, 2000],
@@ -36,23 +35,20 @@ alpha = 1e-3
 h_IFE = 7500                # Ое
 delta_t = 250e-15           # с
 
-# Функции, зависящие от температуры
-@njit(cache=False)
-def K_T(T):
-    return 0.525 * (T - 370)**2
-
-@njit(cache=False)
-def chi_T(T):
-    return 4.2e-7 * np.abs(T - 358)
+def _K_T(T):
+    return 0.522 * (T - 370)**2
+  
+def _chi(m, M):
+    return 1 / (12500 * (1 - m**2 / M**2))
 
 # Загрузка данных
 m_array = np.load('m_array_18.07.2025.npy')
 M_array = np.load('M_array_18.07.2025.npy')
-chi_array = chi_T(T_vals_1) if False else np.full_like(m_array, 8e-5) * 3.3
 K_array = K_T(T_vals_1)
 
-def compute_frequencies(H_mesh, m_mesh, M_mesh, chi_mesh, K_mesh, gamma, alpha):
+def compute_frequencies(H_mesh, m_mesh, M_mesh, K_mesh, gamma, alpha):
     abs_m = np.abs(m_mesh)
+    chi_mesh = _chi(m_mesh, M_mesh)
 
     w_H = gamma * H_mesh
     w_0_sq = gamma**2 * 2 * K_mesh / chi_mesh
@@ -106,7 +102,7 @@ __all__ = [
     # сетки и оси
     'H_vals', 'T_vals',, 'T_init',
     # исходные одномерные массивы (нужны графикам)
-    'm_array', 'M_array', 'chi_array', 'K_array',
+    'm_array', 'M_array', 'K_array',
     # физические константы
     'gamma', 'alpha', 'h_IFE', 'delta_t',
     # функции
