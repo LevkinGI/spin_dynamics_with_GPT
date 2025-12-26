@@ -33,7 +33,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = BASE_DIR / "data"
-TAU_WEIGHT_FALLBACK = 0.1
+TAU_WEIGHT_FALLBACK = 1.0
 logger = logging.getLogger(__name__)
 
 
