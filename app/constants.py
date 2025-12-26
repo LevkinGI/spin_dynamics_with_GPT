@@ -78,7 +78,7 @@ DATA_DIR = BASE_DIR
 def k_T(temperature: Iterable[float] | float) -> np.ndarray:
     """Анизотропия как функция температуры."""
     T = np.asarray(temperature, dtype=float)
-    return 0.522 * (T - 370.0) ** 2
+    return 1.2 * 0.522 * (T - 370.0) ** 2
 
 
 def chi(m: np.ndarray, M: np.ndarray) -> np.ndarray:
