@@ -201,7 +201,7 @@ def _append_residual(
 def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None = None) -> tuple[ModelParameters, List[ParsedSeries]]:
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
-    p0 = initial.as_array() if initial else np.array([1.0, 1.0, ALPHA_DEFAULT], dtype=float)
+    p0 = initial.as_array() if initial else np.array([1.2, 1.0, ALPHA_DEFAULT], dtype=float)
     bounds = ([0.1, 0.1, 1e-5], [10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
