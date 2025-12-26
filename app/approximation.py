@@ -105,7 +105,7 @@ def _split_modes(f1: float, tau1: float, f2: float, tau2: float) -> Tuple[Tuple[
 
 
 def _predict_single_point(H: float, T: float, params: ModelParameters) -> Tuple[Tuple[float, float], Tuple[float, float]]:
-    """Расчёт частот и времен затухания для одной точки (H, T)."""
+    """Расчёт частот и времен затухания для одной точки (H, T). H ожидается в Oe."""
     m_val, M_val, K_val = _materials_at_temperature(T)
 
     m_scaled = params.k_m * m_val
@@ -160,7 +160,8 @@ def _residual_vector(param_array: np.ndarray, observations: Sequence[Observation
 
     for obs in observations:
         try:
-            (f_lf, tau_lf), (f_hf, tau_hf) = _predict_single_point(obs.H, obs.T, params)
+            H_oe = _to_oe(obs.H)
+            (f_lf, tau_lf), (f_hf, tau_hf) = _predict_single_point(H_oe, obs.T, params)
         except Exception as exc:  # noqa: BLE001
             logger.warning("Пропуск точки (H=%.3f, T=%.3f): ошибка модели: %s", obs.H, obs.T, exc)
             continue
@@ -228,18 +229,18 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
     series: List[SeriesData] = []
 
     for dataset in parsed_series:
-        H_values_exp = np.array([obs.H for obs in dataset.observations], dtype=float)
-        T_values_exp = np.array([obs.T for obs in dataset.observations], dtype=float)
+        H_values_exp = np.array([obs.H for obs in dataset.observations], dtype=float)  # мТл
+        T_values_exp = np.array([obs.T for obs in dataset.observations], dtype=float)  # К
 
-        # сетка для модели
-        if dataset.axis_label.startswith("H"):
-            model_axis = H_VALS
-            H_values_model = H_VALS
-            T_values_model = np.full_like(H_VALS, T_values_exp[0])
-        else:
-            model_axis = T_VALS
-            T_values_model = T_VALS
-            H_values_model = np.full_like(T_VALS, H_values_exp[0])
+        # сетка для модели берём в диапазоне экспериментальных точек
+        if dataset.axis_label.startswith("H"):  # ось H в мТл
+            model_axis = np.linspace(H_values_exp.min(), H_values_exp.max(), len(H_VALS))
+            H_values_model = _to_oe(model_axis)  # → Э
+            T_values_model = np.full_like(model_axis, T_values_exp[0])
+        else:  # ось T в К
+            model_axis = np.linspace(T_values_exp.min(), T_values_exp.max(), len(T_VALS))
+            T_values_model = model_axis
+            H_values_model = np.full_like(model_axis, _to_oe(H_values_exp[0]))
 
         model_lf, model_hf, model_lf_tau, model_hf_tau = _evaluate_axis(
             H_values=H_values_model, T_values=T_values_model, params=params
@@ -286,7 +287,7 @@ def _parse_excel_table(path: Path) -> ParsedSeries:
         raise ValueError(f"{path.name}: не удалось прочитать значения оси (первая строка).")
 
     fixed_type, fixed_value = _parse_filename(path.name)
-    axis_label = "H (Oe)" if fixed_type == "T" else "T (K)"
+    axis_label = "H (mT)" if fixed_type == "T" else "T (K)"
     logger.info("Файл %s: фиксировано %s = %s, точек на оси: %d", path.name, fixed_type, fixed_value, len(axis_values))
 
     rows_map = _extract_rows(df.iloc[1:, :])
@@ -399,6 +400,11 @@ def _to_float_array(series: pd.Series | Sequence) -> np.ndarray:
 
 def _all_finite(*values: np.ndarray | float) -> bool:
     return all(np.all(np.isfinite(v)) for v in values)
+
+
+def _to_oe(h_millitesla: float | np.ndarray) -> np.ndarray:
+    """Перевод поля из мТл в Э (1 мТл = 10 Э)."""
+    return np.asarray(h_millitesla, dtype=float) * 10.0
 
 
 def _evaluate_axis(H_values: Iterable[float], T_values: Iterable[float], params: ModelParameters):
