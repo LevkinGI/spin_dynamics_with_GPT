@@ -23,15 +23,15 @@ class SeriesData:
     experimental_hf: np.ndarray
     experimental_lf_tau: np.ndarray
     experimental_hf_tau: np.ndarray
-    experimental_lf_err: np.ndarray | None = None
-    experimental_hf_err: np.ndarray | None = None
-    experimental_lf_tau_err: np.ndarray | None = None
-    experimental_hf_tau_err: np.ndarray | None = None
     model_axis: np.ndarray
     model_lf: np.ndarray
     model_hf: np.ndarray
     model_lf_tau: np.ndarray
     model_hf_tau: np.ndarray
+    experimental_lf_err: np.ndarray | None = None
+    experimental_hf_err: np.ndarray | None = None
+    experimental_lf_tau_err: np.ndarray | None = None
+    experimental_hf_tau_err: np.ndarray | None = None
 
 
 def _scatter_pair(
