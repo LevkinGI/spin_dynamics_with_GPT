@@ -231,6 +231,10 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
     for dataset in parsed_series:
         H_values_exp = np.array([obs.H for obs in dataset.observations], dtype=float)  # мТл
         T_values_exp = np.array([obs.T for obs in dataset.observations], dtype=float)  # К
+        err_f_lf = np.array([obs.err_f_lf for obs in dataset.observations], dtype=float) if any(obs.err_f_lf is not None for obs in dataset.observations) else None
+        err_f_hf = np.array([obs.err_f_hf for obs in dataset.observations], dtype=float) if any(obs.err_f_hf is not None for obs in dataset.observations) else None
+        err_tau_lf = np.array([obs.err_tau_lf for obs in dataset.observations], dtype=float) if any(obs.err_tau_lf is not None for obs in dataset.observations) else None
+        err_tau_hf = np.array([obs.err_tau_hf for obs in dataset.observations], dtype=float) if any(obs.err_tau_hf is not None for obs in dataset.observations) else None
 
         # сетка для модели берём в диапазоне экспериментальных точек
         if dataset.axis_label.startswith("H"):  # ось H в мТл
@@ -258,6 +262,10 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
                 experimental_hf=dataset.exp_f_hf,
                 experimental_lf_tau=dataset.exp_tau_lf,
                 experimental_hf_tau=dataset.exp_tau_hf,
+                experimental_lf_err=err_f_lf,
+                experimental_hf_err=err_f_hf,
+                experimental_lf_tau_err=err_tau_lf,
+                experimental_hf_tau_err=err_tau_hf,
                 model_axis=model_axis,
                 model_lf=model_lf,
                 model_hf=model_hf,
