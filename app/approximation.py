@@ -1,5 +1,5 @@
 """
-Подбор коэффициентов k_M, k_m, k_K и alpha по экспериментальным точкам.
+Подбор коэффициентов k_M, k_m и alpha по экспериментальным точкам.
 
 Скрипт строит вектор невязок для всех доступных наборов данных и запускает
 `scipy.optimize.least_squares`. После подбора сохраняется сводный график
@@ -59,15 +59,14 @@ def configure_logging() -> None:
 class ModelParameters:
     k_M: float = 1.0
     k_m: float = 1.0
-    k_K: float = 1.0
     alpha: float = ALPHA_DEFAULT
 
     def as_array(self) -> np.ndarray:
-        return np.array([self.k_M, self.k_m, self.k_K, self.alpha], dtype=float)
+        return np.array([self.k_M, self.k_m, self.alpha], dtype=float)
 
     @classmethod
     def from_array(cls, arr: Sequence[float]) -> "ModelParameters":
-        return cls(k_M=float(arr[0]), k_m=float(arr[1]), k_K=float(arr[2]), alpha=float(arr[3]))
+        return cls(k_M=float(arr[0]), k_m=float(arr[1]), alpha=float(arr[2]))
 
 
 @dataclass
@@ -110,13 +109,12 @@ def _predict_single_point(H: float, T: float, params: ModelParameters) -> Tuple[
 
     m_scaled = params.k_m * m_val
     M_scaled = params.k_M * M_val
-    K_scaled = params.k_K * K_val
 
     (f1, tau1), (f2, tau2) = compute_frequencies(
         H_mesh=np.array([[H]], dtype=float),
         m_mesh=np.array([[m_scaled]], dtype=float),
         M_mesh=np.array([[M_scaled]], dtype=float),
-        K_mesh=np.array([[K_scaled]], dtype=float),
+        K_mesh=np.array([[K_val]], dtype=float),
         gamma=GAMMA,
         alpha=params.alpha,
     )
@@ -203,8 +201,8 @@ def _append_residual(
 def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None = None) -> tuple[ModelParameters, List[ParsedSeries]]:
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
-    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
-    bounds = ([0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 0.05])
+    p0 = initial.as_array() if initial else np.array([1.0, 1.0, ALPHA_DEFAULT], dtype=float)
+    bounds = ([0.1, 0.1, 1e-5], [10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
     res0 = _residual_vector(p0, observations)
@@ -214,10 +212,9 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations,), method="trf")
     best = ModelParameters.from_array(solution.x)
     logger.info(
-        "Подбор завершён: k_M=%.5f, k_m=%.5f, k_K=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
+        "Подбор завершён: k_M=%.5f, k_m=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
         best.k_M,
         best.k_m,
-        best.k_K,
         best.alpha,
         solution.cost,
         solution.nfev,
@@ -450,10 +447,9 @@ def main(data_dir: str | None = None) -> None:
     try:
         best, parsed_series = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
         logger.info(
-            "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, alpha=%.6f",
+            "Оптимальные параметры: k_M=%.4f, k_m=%.4f, alpha=%.6f",
             best.k_M,
             best.k_m,
-            best.k_K,
             best.alpha,
         )
 
