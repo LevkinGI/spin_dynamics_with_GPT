@@ -36,7 +36,7 @@ LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = BASE_DIR / "data"
 TAU_WEIGHT_FALLBACK = 1.0
-PHASE_WEIGHT = 30.0
+PHASE_WEIGHT = 10.0
 PHASE_FILES = {
     "temp": "Temp_exper.mat",
     "field": "H_exper.mat",
