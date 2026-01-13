@@ -303,7 +303,7 @@ def _append_residual(
     if not np.isfinite(model_value):
         return
     if sigma is not None and sigma > 0:
-        residuals.append((model_value - exp_value) / sigma)
+        residuals.append(weight * (model_value - exp_value) / sigma)
     else:
         residuals.append(weight * (model_value - exp_value))
 
