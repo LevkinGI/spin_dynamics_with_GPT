@@ -34,6 +34,26 @@ class SeriesData:
     experimental_hf_tau_err: np.ndarray | None = None
 
 
+@dataclass
+class PhaseDiagramData:
+    temp_mesh: np.ndarray
+    field_mesh: np.ndarray
+    theta_exp: np.ndarray
+    theta_model: np.ndarray
+    temp_label: str
+    field_label: str
+
+
+def _axis_from_mesh(mesh: np.ndarray, axis: int) -> np.ndarray:
+    if mesh.ndim != 2:
+        return np.unique(mesh)
+    if axis == 0:
+        values = mesh[:, 0]
+    else:
+        values = mesh[0, :]
+    return np.asarray(values, dtype=float)
+
+
 def _scatter_pair(
     fig,
     row: int,
@@ -65,7 +85,7 @@ def _scatter_pair(
     )
 
 
-def build_summary_figure(series: Sequence[SeriesData]):
+def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagramData | None = None):
     """
     Строит сводный график (частоты и времена затухания) для всех серий.
 
@@ -75,8 +95,11 @@ def build_summary_figure(series: Sequence[SeriesData]):
     if not series:
         raise ValueError("Нет данных для построения графика.")
 
-    cols = len(series)
-    titles = [s.name for s in series]
+    cols = len(series) + (1 if phase_diagram is not None else 0)
+    titles = []
+    if phase_diagram is not None:
+        titles.append("Фазовая диаграмма")
+    titles.extend([s.name for s in series])
     fig = make_subplots(
         rows=2,
         cols=cols,
@@ -86,7 +109,43 @@ def build_summary_figure(series: Sequence[SeriesData]):
         subplot_titles=tuple(titles),
     )
 
-    for idx, s in enumerate(series, start=1):
+    col_offset = 0
+    if phase_diagram is not None:
+        temp_axis = _axis_from_mesh(phase_diagram.temp_mesh, axis=1)
+        field_axis = _axis_from_mesh(phase_diagram.field_mesh, axis=0)
+        fig.add_trace(
+            go.Heatmap(
+                x=temp_axis,
+                y=field_axis,
+                z=phase_diagram.theta_exp,
+                colorscale="Viridis",
+                colorbar=dict(title="θ"),
+                name="theta_exp",
+            ),
+            row=1,
+            col=1,
+        )
+        fig.add_trace(
+            go.Heatmap(
+                x=temp_axis,
+                y=field_axis,
+                z=phase_diagram.theta_model,
+                colorscale="Viridis",
+                showscale=False,
+                name="theta_model",
+            ),
+            row=2,
+            col=1,
+        )
+        fig.update_xaxes(title_text=phase_diagram.temp_label, row=2, col=1)
+        fig.update_yaxes(title_text=phase_diagram.field_label, row=1, col=1)
+        fig.update_yaxes(title_text=phase_diagram.field_label, row=2, col=1)
+        for row in (1, 2):
+            fig.update_xaxes(showline=True, linewidth=1, linecolor="black", mirror=True, showgrid=True, gridcolor="#cccccc", gridwidth=1, row=row, col=1)
+            fig.update_yaxes(showline=True, linewidth=1, linecolor="black", mirror=True, showgrid=True, gridcolor="#cccccc", gridwidth=1, row=row, col=1)
+        col_offset = 1
+
+    for idx, s in enumerate(series, start=1 + col_offset):
         exp_axis = s.exp_axis
         model_axis = s.model_axis
         _scatter_pair(
@@ -143,8 +202,9 @@ def build_summary_figure(series: Sequence[SeriesData]):
             fig.update_xaxes(showline=True, linewidth=1, linecolor="black", mirror=True, showgrid=True, gridcolor="#cccccc", gridwidth=1, row=row, col=idx)
             fig.update_yaxes(showline=True, linewidth=1, linecolor="black", mirror=True, showgrid=True, gridcolor="#cccccc", gridwidth=1, row=row, col=idx)
 
-    fig.update_yaxes(title_text="Частота (ГГц)", row=1, col=1)
-    fig.update_yaxes(title_text="Время затухания (нс)", row=2, col=1)
+    freq_col = 1 + col_offset
+    fig.update_yaxes(title_text="Частота (ГГц)", row=1, col=freq_col)
+    fig.update_yaxes(title_text="Время затухания (нс)", row=2, col=freq_col)
     fig.update_layout(
         showlegend=False,
         hovermode="x unified",
@@ -161,4 +221,4 @@ def build_summary_figure(series: Sequence[SeriesData]):
     return fig
 
 
-__all__ = ["SeriesData", "build_summary_figure"]
+__all__ = ["PhaseDiagramData", "SeriesData", "build_summary_figure"]
