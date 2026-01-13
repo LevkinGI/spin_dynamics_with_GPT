@@ -36,9 +36,11 @@ class SeriesData:
 
 @dataclass
 class PhaseDiagramData:
-    temp_mesh: np.ndarray
-    field_mesh: np.ndarray
+    temp_axis_exp: np.ndarray
+    field_axis_exp: np.ndarray
     theta_exp: np.ndarray
+    temp_axis_model: np.ndarray
+    field_axis_model: np.ndarray
     theta_model: np.ndarray
     temp_label: str
     field_label: str
@@ -52,6 +54,47 @@ def _axis_from_mesh(mesh: np.ndarray, axis: int) -> np.ndarray:
     else:
         values = mesh[0, :]
     return np.asarray(values, dtype=float)
+
+
+def _phase_colorscale() -> list[list[float | str]]:
+    return [
+        [0.00, "rgb(0, 0, 0)"],
+        [0.31, "rgb(0, 0, 255)"],
+        [0.62, "rgb(0, 128, 0)"],
+        [0.93, "rgb(255, 255, 0)"],
+        [1.00, "rgb(255, 255, 255)"],
+    ]
+
+
+def _add_phase_diagram(fig, *, row: int, col: int, t_vals: np.ndarray, h_vals: np.ndarray, theta: np.ndarray, name: str):
+    theta_plot = theta.T
+    fig.add_trace(
+        go.Heatmap(
+            x=t_vals,
+            y=h_vals,
+            z=theta_plot,
+            colorscale=_phase_colorscale(),
+            zmin=0,
+            zmax=np.pi / 2,
+            showscale=False,
+            name=name,
+        ),
+        row=row,
+        col=col,
+    )
+    fig.add_trace(
+        go.Contour(
+            x=t_vals,
+            y=h_vals,
+            z=theta_plot,
+            showscale=False,
+            contours=dict(start=0.01, end=0.01, size=0.01, coloring="none"),
+            line=dict(width=1.5, color="white"),
+            name=f"{name}_contour",
+        ),
+        row=row,
+        col=col,
+    )
 
 
 def _scatter_pair(
@@ -117,37 +160,23 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
 
     col_offset = 0
     if phase_diagram is not None:
-        temp_axis = _axis_from_mesh(phase_diagram.temp_mesh, axis=1)
-        field_axis = _axis_from_mesh(phase_diagram.field_mesh, axis=0)
-        theta_min = np.nanmin([np.nanmin(phase_diagram.theta_exp), np.nanmin(phase_diagram.theta_model)])
-        theta_max = np.nanmax([np.nanmax(phase_diagram.theta_exp), np.nanmax(phase_diagram.theta_model)])
-        fig.add_trace(
-            go.Heatmap(
-                x=temp_axis,
-                y=field_axis,
-                z=phase_diagram.theta_exp,
-                colorscale="Viridis",
-                zmin=theta_min,
-                zmax=theta_max,
-                showscale=False,
-                name="theta_exp",
-            ),
+        _add_phase_diagram(
+            fig,
             row=1,
             col=1,
+            t_vals=phase_diagram.temp_axis_exp,
+            h_vals=phase_diagram.field_axis_exp,
+            theta=phase_diagram.theta_exp,
+            name="theta_exp",
         )
-        fig.add_trace(
-            go.Heatmap(
-                x=temp_axis,
-                y=field_axis,
-                z=phase_diagram.theta_model,
-                colorscale="Viridis",
-                zmin=theta_min,
-                zmax=theta_max,
-                showscale=False,
-                name="theta_model",
-            ),
+        _add_phase_diagram(
+            fig,
             row=2,
             col=1,
+            t_vals=phase_diagram.temp_axis_model,
+            h_vals=phase_diagram.field_axis_model,
+            theta=phase_diagram.theta_model,
+            name="theta_model",
         )
         fig.update_xaxes(title_text=phase_diagram.temp_label, row=2, col=1)
         fig.update_yaxes(title_text=phase_diagram.field_label, row=1, col=1)

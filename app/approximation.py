@@ -279,6 +279,16 @@ def _temperature_indices(temp_kelvin: np.ndarray) -> np.ndarray:
     return np.argmin(diffs, axis=0)
 
 
+def _axis_from_mesh(mesh: np.ndarray, axis: int) -> np.ndarray:
+    if mesh.ndim != 2:
+        return np.unique(mesh)
+    if axis == 0:
+        values = mesh[:, 0]
+    else:
+        values = mesh[0, :]
+    return np.asarray(values, dtype=float)
+
+
 def _append_residual(
     residuals: list[float],
     model_value: float,
@@ -378,11 +388,27 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
 def _prepare_phase_diagram(params: ModelParameters, phase_data: PhaseDataset | None) -> PhaseDiagramData | None:
     if phase_data is None:
         return None
-    model_theta = _predict_phase_diagram(params, phase_data)
+    temp_exp_axis = _axis_from_mesh(phase_data.temp_mesh_kelvin, axis=1)
+    field_exp_axis = _axis_from_mesh(phase_data.field_mesh, axis=0)
+    model_temp_axis = np.linspace(temp_exp_axis.min(), temp_exp_axis.max(), max(300, temp_exp_axis.size * 2))
+    model_field_axis = np.linspace(field_exp_axis.min(), field_exp_axis.max(), max(300, field_exp_axis.size * 2))
+    model_temp_mesh, model_field_mesh = np.meshgrid(model_temp_axis, model_field_axis)
+    model_theta = _predict_phase_diagram(
+        params,
+        PhaseDataset(
+            temp_mesh=model_temp_mesh,
+            field_mesh=model_field_mesh,
+            theta_exp=phase_data.theta_exp,
+            temp_mesh_kelvin=model_temp_mesh,
+            temp_label=phase_data.temp_label,
+        ),
+    )
     return PhaseDiagramData(
-        temp_mesh=phase_data.temp_mesh_kelvin,
-        field_mesh=phase_data.field_mesh,
+        temp_axis_exp=temp_exp_axis,
+        field_axis_exp=field_exp_axis,
         theta_exp=phase_data.theta_exp,
+        temp_axis_model=model_temp_axis,
+        field_axis_model=model_field_axis,
         theta_model=model_theta,
         temp_label=phase_data.temp_label,
         field_label="H (mT)",
