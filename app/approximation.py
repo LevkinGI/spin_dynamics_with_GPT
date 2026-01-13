@@ -390,7 +390,7 @@ def _prepare_phase_diagram(params: ModelParameters, phase_data: PhaseDataset | N
         return None
     temp_exp_axis = _axis_from_mesh(phase_data.temp_mesh_kelvin, axis=1)
     field_exp_axis = _axis_from_mesh(phase_data.field_mesh, axis=0)
-    model_temp_axis = T_VALS
+    model_temp_axis = np.linspace(temp_exp_axis.min(), temp_exp_axis.max(), T_VALS.size)
     model_field_axis = np.linspace(field_exp_axis.min(), field_exp_axis.max(), max(300, field_exp_axis.size * 2))
     model_temp_mesh, model_field_mesh = np.meshgrid(model_temp_axis, model_field_axis)
     model_theta = _predict_phase_diagram(
