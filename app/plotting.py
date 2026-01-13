@@ -189,7 +189,6 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
             h_vals=phase_diagram.field_axis_model,
             theta=phase_diagram.theta_model,
             name="theta_model",
-            transpose=True,
             add_contour=True,
         )
         fig.update_xaxes(title_text=phase_diagram.temp_label, row=2, col=1)
