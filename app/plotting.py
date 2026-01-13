@@ -66,8 +66,19 @@ def _phase_colorscale() -> list[list[float | str]]:
     ]
 
 
-def _add_phase_diagram(fig, *, row: int, col: int, t_vals: np.ndarray, h_vals: np.ndarray, theta: np.ndarray, name: str):
-    theta_plot = theta.T
+def _add_phase_diagram(
+    fig,
+    *,
+    row: int,
+    col: int,
+    t_vals: np.ndarray,
+    h_vals: np.ndarray,
+    theta: np.ndarray,
+    name: str,
+    transpose: bool = False,
+    add_contour: bool = False,
+):
+    theta_plot = theta.T if transpose else theta
     fig.add_trace(
         go.Heatmap(
             x=t_vals,
@@ -82,19 +93,20 @@ def _add_phase_diagram(fig, *, row: int, col: int, t_vals: np.ndarray, h_vals: n
         row=row,
         col=col,
     )
-    fig.add_trace(
-        go.Contour(
-            x=t_vals,
-            y=h_vals,
-            z=theta_plot,
-            showscale=False,
-            contours=dict(start=0.01, end=0.01, size=0.01, coloring="none"),
-            line=dict(width=1.5, color="white"),
-            name=f"{name}_contour",
-        ),
-        row=row,
-        col=col,
-    )
+    if add_contour:
+        fig.add_trace(
+            go.Contour(
+                x=t_vals,
+                y=h_vals,
+                z=theta_plot,
+                showscale=False,
+                contours=dict(start=0.01, end=0.01, size=0.01, coloring="none"),
+                line=dict(width=1.5, color="white"),
+                name=f"{name}_contour",
+            ),
+            row=row,
+            col=col,
+        )
 
 
 def _scatter_pair(
@@ -177,6 +189,8 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
             h_vals=phase_diagram.field_axis_model,
             theta=phase_diagram.theta_model,
             name="theta_model",
+            transpose=True,
+            add_contour=True,
         )
         fig.update_xaxes(title_text=phase_diagram.temp_label, row=2, col=1)
         fig.update_yaxes(title_text=phase_diagram.field_label, row=1, col=1)
