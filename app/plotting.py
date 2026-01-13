@@ -191,7 +191,9 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
             name="theta_model",
             add_contour=True,
         )
-        fig.update_xaxes(title_text=phase_diagram.temp_label, row=2, col=1)
+        temp_range = [float(np.min(phase_diagram.temp_axis_exp)), float(np.max(phase_diagram.temp_axis_exp))]
+        fig.update_xaxes(title_text=phase_diagram.temp_label, row=2, col=1, range=temp_range)
+        fig.update_xaxes(range=temp_range, row=1, col=1)
         fig.update_yaxes(title_text=phase_diagram.field_label, row=1, col=1)
         fig.update_yaxes(title_text=phase_diagram.field_label, row=2, col=1)
         for row in (1, 2):
