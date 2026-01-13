@@ -185,7 +185,7 @@ def _load_phase_dataset(data_dir: Path) -> PhaseDataset | None:
 
     temp_mesh = _load_mat_array(temp_path, "Temp_exper")
     field_mesh = _load_mat_array(field_path, "H_exper")
-    theta_exp = _load_mat_array(theta_path, "teta_exper")
+    theta_exp = np.abs(_load_mat_array(theta_path, "teta_exper"))
 
     if temp_mesh.shape != field_mesh.shape or temp_mesh.shape != theta_exp.shape:
         raise ValueError(
