@@ -36,6 +36,7 @@ LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = BASE_DIR / "data"
 TAU_WEIGHT_FALLBACK = 1.0
+LOW_FREQ_WEIGHT = 10.0
 PHASE_WEIGHT = 0.0
 PHASE_FILES = {
     "temp": "Temp_exper.mat",
@@ -238,9 +239,9 @@ def _residual_vector(
             logger.warning("Пропуск точки (H=%.3f, T=%.3f): нечисловой результат модели", obs.H, obs.T)
             continue
 
-        _append_residual(residuals, f_lf, obs.f_lf, obs.err_f_lf, weight=1.0)
+        _append_residual(residuals, f_lf, obs.f_lf, obs.err_f_lf, weight=LOW_FREQ_WEIGHT)
         _append_residual(residuals, f_hf, obs.f_hf, obs.err_f_hf, weight=1.0)
-        _append_residual(residuals, tau_lf, obs.tau_lf, obs.err_tau_lf, weight=TAU_WEIGHT_FALLBACK)
+        _append_residual(residuals, tau_lf, obs.tau_lf, obs.err_tau_lf, weight=LOW_FREQ_WEIGHT)
         _append_residual(residuals, tau_hf, obs.tau_hf, obs.err_tau_hf, weight=TAU_WEIGHT_FALLBACK)
 
     if phase_data is not None:
