@@ -36,7 +36,7 @@ LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = BASE_DIR / "data"
 TAU_WEIGHT_FALLBACK = 1.0
-PHASE_WEIGHT = 100.0
+PHASE_WEIGHT = 30.0
 PHASE_FILES = {
     "temp": "Temp_exper.mat",
     "field": "H_exper.mat",
@@ -196,10 +196,9 @@ def _load_phase_dataset(data_dir: Path) -> PhaseDataset | None:
     max_temp = np.nanmax(temp_mesh)
     if max_temp < 200:
         temp_mesh_kelvin = temp_mesh + 273.15
-        temp_label = "T (°C)"
     else:
         temp_mesh_kelvin = temp_mesh
-        temp_label = "T (K)"
+    temp_label = "T (K)"
 
     logger.info("Фазовая диаграмма: загружены матрицы %s, размер %s", PHASE_FILES, temp_mesh.shape)
     return PhaseDataset(
@@ -381,7 +380,7 @@ def _prepare_phase_diagram(params: ModelParameters, phase_data: PhaseDataset | N
         return None
     model_theta = _predict_phase_diagram(params, phase_data)
     return PhaseDiagramData(
-        temp_mesh=phase_data.temp_mesh,
+        temp_mesh=phase_data.temp_mesh_kelvin,
         field_mesh=phase_data.field_mesh,
         theta_exp=phase_data.theta_exp,
         theta_model=model_theta,

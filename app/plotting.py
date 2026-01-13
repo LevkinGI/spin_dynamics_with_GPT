@@ -96,10 +96,16 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
         raise ValueError("Нет данных для построения графика.")
 
     cols = len(series) + (1 if phase_diagram is not None else 0)
-    titles = []
-    if phase_diagram is not None:
-        titles.append("Фазовая диаграмма")
-    titles.extend([s.name for s in series])
+    titles: list[str] = []
+    for row in range(2):
+        for col in range(cols):
+            if phase_diagram is not None and col == 0:
+                titles.append("эксперимент" if row == 0 else "аппроксимация")
+            elif row == 0:
+                series_idx = col - (1 if phase_diagram is not None else 0)
+                titles.append(series[series_idx].name)
+            else:
+                titles.append("")
     fig = make_subplots(
         rows=2,
         cols=cols,
@@ -113,13 +119,17 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
     if phase_diagram is not None:
         temp_axis = _axis_from_mesh(phase_diagram.temp_mesh, axis=1)
         field_axis = _axis_from_mesh(phase_diagram.field_mesh, axis=0)
+        theta_min = np.nanmin([np.nanmin(phase_diagram.theta_exp), np.nanmin(phase_diagram.theta_model)])
+        theta_max = np.nanmax([np.nanmax(phase_diagram.theta_exp), np.nanmax(phase_diagram.theta_model)])
         fig.add_trace(
             go.Heatmap(
                 x=temp_axis,
                 y=field_axis,
                 z=phase_diagram.theta_exp,
                 colorscale="Viridis",
-                colorbar=dict(title="θ"),
+                zmin=theta_min,
+                zmax=theta_max,
+                showscale=False,
                 name="theta_exp",
             ),
             row=1,
@@ -131,6 +141,8 @@ def build_summary_figure(series: Sequence[SeriesData], phase_diagram: PhaseDiagr
                 y=field_axis,
                 z=phase_diagram.theta_model,
                 colorscale="Viridis",
+                zmin=theta_min,
+                zmax=theta_max,
                 showscale=False,
                 name="theta_model",
             ),
