@@ -16,6 +16,7 @@ from typing import Iterable, List, Sequence, Tuple
 import numpy as np
 import pandas as pd
 from scipy.optimize import least_squares
+from scipy.io import loadmat
 
 from .constants import (
     ALPHA_DEFAULT,
@@ -24,16 +25,23 @@ from .constants import (
     K_ARRAY,
     SUM_MAG_ARRAY,
     T_VALS,
+    compute_phases,
     compute_frequencies,
     DIFF_MAG_ARRAY,
 )
-from .plotting import SeriesData, build_summary_figure
+from .plotting import PhaseDiagramData, SeriesData, build_summary_figure
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 LOG_DIR = BASE_DIR / "logs"
 LOG_FILE = LOG_DIR / "approximation.log"
 DATA_DIR = BASE_DIR / "data"
 TAU_WEIGHT_FALLBACK = 1.0
+PHASE_WEIGHT = 30.0
+PHASE_FILES = {
+    "temp": "Temp_exper.mat",
+    "field": "H_exper.mat",
+    "theta": "teta_exper.mat",
+}
 logger = logging.getLogger(__name__)
 
 
@@ -98,6 +106,15 @@ class ParsedSeries:
     exp_tau_hf: np.ndarray
 
 
+@dataclass
+class PhaseDataset:
+    temp_mesh: np.ndarray
+    field_mesh: np.ndarray
+    theta_exp: np.ndarray
+    temp_mesh_kelvin: np.ndarray
+    temp_label: str
+
+
 def _split_modes(f1: float, tau1: float, f2: float, tau2: float) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """Возвращает ((f_LF, tau_LF), (f_HF, tau_HF))."""
     modes = sorted(((f1, tau1), (f2, tau2)), key=lambda x: x[0])
@@ -146,6 +163,53 @@ def _build_observations_and_series(data_dir: Path) -> Tuple[List[Observation], L
     return observations, series_list
 
 
+def _load_mat_array(path: Path, expected_key: str) -> np.ndarray:
+    data = loadmat(path)
+    if expected_key in data:
+        arr = data[expected_key]
+    else:
+        keys = [key for key in data.keys() if not key.startswith("__")]
+        if not keys:
+            raise KeyError(f"{path.name}: не удалось найти массив в .mat файле.")
+        arr = data[keys[0]]
+    return np.asarray(arr, dtype=float).squeeze()
+
+
+def _load_phase_dataset(data_dir: Path) -> PhaseDataset | None:
+    temp_path = data_dir / PHASE_FILES["temp"]
+    field_path = data_dir / PHASE_FILES["field"]
+    theta_path = data_dir / PHASE_FILES["theta"]
+    if not temp_path.exists() or not field_path.exists() or not theta_path.exists():
+        logger.warning("Фазовая диаграмма: файлы %s не найдены, вклад в аппроксимацию пропущен.", PHASE_FILES)
+        return None
+
+    temp_mesh = _load_mat_array(temp_path, "Temp_exper")
+    field_mesh = _load_mat_array(field_path, "H_exper")
+    theta_exp = np.abs(_load_mat_array(theta_path, "teta_exper"))
+
+    if temp_mesh.shape != field_mesh.shape or temp_mesh.shape != theta_exp.shape:
+        raise ValueError(
+            "Фазовая диаграмма: размеры матриц не совпадают: "
+            f"Temp={temp_mesh.shape}, H={field_mesh.shape}, theta={theta_exp.shape}."
+        )
+
+    max_temp = np.nanmax(temp_mesh)
+    if max_temp < 200:
+        temp_mesh_kelvin = temp_mesh + 273.15
+    else:
+        temp_mesh_kelvin = temp_mesh
+    temp_label = "T (K)"
+
+    logger.info("Фазовая диаграмма: загружены матрицы %s, размер %s", PHASE_FILES, temp_mesh.shape)
+    return PhaseDataset(
+        temp_mesh=temp_mesh,
+        field_mesh=field_mesh,
+        theta_exp=theta_exp,
+        temp_mesh_kelvin=temp_mesh_kelvin,
+        temp_label=temp_label,
+    )
+
+
 def _safe_value(value: float | None) -> float | None:
     if value is None:
         return None
@@ -154,7 +218,11 @@ def _safe_value(value: float | None) -> float | None:
     return float(value)
 
 
-def _residual_vector(param_array: np.ndarray, observations: Sequence[Observation]) -> np.ndarray:
+def _residual_vector(
+    param_array: np.ndarray,
+    observations: Sequence[Observation],
+    phase_data: PhaseDataset | None,
+) -> np.ndarray:
     params = ModelParameters.from_array(param_array)
     residuals: list[float] = []
 
@@ -175,11 +243,50 @@ def _residual_vector(param_array: np.ndarray, observations: Sequence[Observation
         _append_residual(residuals, tau_lf, obs.tau_lf, obs.err_tau_lf, weight=TAU_WEIGHT_FALLBACK)
         _append_residual(residuals, tau_hf, obs.tau_hf, obs.err_tau_hf, weight=TAU_WEIGHT_FALLBACK)
 
+    if phase_data is not None:
+        residuals.extend(_phase_residuals(params, phase_data))
+
     if not residuals:
         logger.error("Ни одной валидной невязки не осталось: все точки отброшены.")
         residuals.append(1e6)  # штраф, чтобы least_squares не падал на пустом векторе
 
     return np.asarray(residuals, dtype=float)
+
+
+def _phase_residuals(params: ModelParameters, phase_data: PhaseDataset) -> list[float]:
+    model_theta = _predict_phase_diagram(params, phase_data)
+    mask = np.isfinite(phase_data.theta_exp) & np.isfinite(model_theta)
+    if not np.any(mask):
+        logger.warning("Фазовая диаграмма: нет валидных точек для невязки.")
+        return []
+    residuals = PHASE_WEIGHT * (model_theta[mask] - phase_data.theta_exp[mask])
+    return residuals.astype(float).ravel().tolist()
+
+
+def _predict_phase_diagram(params: ModelParameters, phase_data: PhaseDataset) -> np.ndarray:
+    temp_kelvin = phase_data.temp_mesh_kelvin
+    idx = _temperature_indices(temp_kelvin)
+    m_vals = params.k_m * DIFF_MAG_ARRAY[idx].reshape(temp_kelvin.shape)
+    M_vals = params.k_M * SUM_MAG_ARRAY[idx].reshape(temp_kelvin.shape)
+    K_vals = params.k_K * K_ARRAY[idx].reshape(temp_kelvin.shape)
+    H_oe = _to_oe(phase_data.field_mesh)
+    return compute_phases(H_mesh=H_oe, m_mesh=m_vals, M_mesh=M_vals, K_mesh=K_vals)
+
+
+def _temperature_indices(temp_kelvin: np.ndarray) -> np.ndarray:
+    temps_flat = temp_kelvin.ravel()
+    diffs = np.abs(T_VALS[:, None] - temps_flat[None, :])
+    return np.argmin(diffs, axis=0)
+
+
+def _axis_from_mesh(mesh: np.ndarray, axis: int) -> np.ndarray:
+    if mesh.ndim != 2:
+        return np.unique(mesh)
+    if axis == 0:
+        values = mesh[:, 0]
+    else:
+        values = mesh[0, :]
+    return np.asarray(values, dtype=float)
 
 
 def _append_residual(
@@ -200,18 +307,19 @@ def _append_residual(
         residuals.append(weight * (model_value - exp_value))
 
 
-def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None = None) -> tuple[ModelParameters, List[ParsedSeries]]:
+def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None = None) -> tuple[ModelParameters, List[ParsedSeries], PhaseDataset | None]:
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
+    phase_data = _load_phase_dataset(data_root)
     p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
     bounds = ([0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
-    res0 = _residual_vector(p0, observations)
+    res0 = _residual_vector(p0, observations, phase_data)
     if res0.size == 0 or not np.all(np.isfinite(res0)):
         raise ValueError("Ни одной валидной невязки для начальной точки; проверьте входные данные.")
 
-    solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations,), method="trf")
+    solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations, phase_data), method="trf")
     best = ModelParameters.from_array(solution.x)
     logger.info(
         "Подбор завершён: k_M=%.5f, k_m=%.5f, k_K=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
@@ -222,7 +330,7 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
         solution.cost,
         solution.nfev,
     )
-    return best, parsed_series
+    return best, parsed_series, phase_data
 
 
 def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSeries]) -> List[SeriesData]:
@@ -275,6 +383,36 @@ def _prepare_series(params: ModelParameters, parsed_series: Sequence[ParsedSerie
         )
 
     return series
+
+
+def _prepare_phase_diagram(params: ModelParameters, phase_data: PhaseDataset | None) -> PhaseDiagramData | None:
+    if phase_data is None:
+        return None
+    temp_exp_axis = _axis_from_mesh(phase_data.temp_mesh_kelvin, axis=1)
+    field_exp_axis = _axis_from_mesh(phase_data.field_mesh, axis=0)
+    model_temp_axis = T_VALS
+    model_field_axis = np.linspace(field_exp_axis.min(), field_exp_axis.max(), max(300, field_exp_axis.size * 2))
+    model_temp_mesh, model_field_mesh = np.meshgrid(model_temp_axis, model_field_axis)
+    model_theta = _predict_phase_diagram(
+        params,
+        PhaseDataset(
+            temp_mesh=model_temp_mesh,
+            field_mesh=model_field_mesh,
+            theta_exp=phase_data.theta_exp,
+            temp_mesh_kelvin=model_temp_mesh,
+            temp_label=phase_data.temp_label,
+        ),
+    )
+    return PhaseDiagramData(
+        temp_axis_exp=temp_exp_axis,
+        field_axis_exp=field_exp_axis,
+        theta_exp=phase_data.theta_exp,
+        temp_axis_model=model_temp_axis,
+        field_axis_model=model_field_axis,
+        theta_model=model_theta,
+        temp_label=phase_data.temp_label,
+        field_label="H (mT)",
+    )
 
 
 def _parse_excel_table(path: Path) -> ParsedSeries:
@@ -448,7 +586,7 @@ def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
 def main(data_dir: str | None = None) -> None:
     configure_logging()
     try:
-        best, parsed_series = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
+        best, parsed_series, phase_data = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
         logger.info(
             "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, alpha=%.6f",
             best.k_M,
@@ -458,7 +596,8 @@ def main(data_dir: str | None = None) -> None:
         )
 
         series = _prepare_series(best, parsed_series)
-        fig = build_summary_figure(series)
+        phase_diagram = _prepare_phase_diagram(best, phase_data)
+        fig = build_summary_figure(series, phase_diagram=phase_diagram)
         fig.show()
         logger.info("Готово. График открыт в браузере.")
     except Exception as exc:  # noqa: BLE001
