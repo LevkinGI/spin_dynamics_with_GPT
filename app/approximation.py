@@ -415,6 +415,23 @@ def _prepare_phase_diagram(params: ModelParameters, phase_data: PhaseDataset | N
     )
 
 
+def _save_theoretical_curves(series: Sequence[SeriesData], output_dir: Path) -> None:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for dataset in series:
+        output_path = output_dir / f"{dataset.name}.npy"
+        payload = np.vstack(
+            [
+                dataset.model_axis,
+                dataset.model_hf,
+                dataset.model_lf,
+                dataset.model_hf_tau,
+                dataset.model_lf_tau,
+            ]
+        )
+        np.save(output_path, payload)
+        logger.info("Сохранены теоретические кривые %s", output_path.name)
+
+
 def _parse_excel_table(path: Path) -> ParsedSeries:
     """
     Читает Excel-файл с данными по одному срезу (H = const или T = const).
@@ -596,6 +613,7 @@ def main(data_dir: str | None = None) -> None:
         )
 
         series = _prepare_series(best, parsed_series)
+        _save_theoretical_curves(series, BASE_DIR)
         phase_diagram = _prepare_phase_diagram(best, phase_data)
         fig = build_summary_figure(series, phase_diagram=phase_diagram)
         fig.show()
