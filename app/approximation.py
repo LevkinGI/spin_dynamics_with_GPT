@@ -1,5 +1,5 @@
 """
-Подбор коэффициентов k_M, k_m, k_K и alpha по экспериментальным точкам.
+Подбор коэффициентов k_M, k_m, k_K, k_lambda и alpha по экспериментальным точкам.
 
 Скрипт строит вектор невязок для всех доступных наборов данных и запускает
 `scipy.optimize.least_squares`. После подбора сохраняется сводный график
@@ -23,6 +23,7 @@ from .constants import (
     GAMMA,
     H_VALS,
     K_ARRAY,
+    LAMBDA_WEISS,
     SUM_MAG_ARRAY,
     T_VALS,
     compute_phases,
@@ -68,14 +69,15 @@ class ModelParameters:
     k_M: float = 1.0
     k_m: float = 1.0
     k_K: float = 1.0
+    k_lambda: float = 1.0
     alpha: float = ALPHA_DEFAULT
 
     def as_array(self) -> np.ndarray:
-        return np.array([self.k_M, self.k_m, self.k_K, self.alpha], dtype=float)
+        return np.array([self.k_M, self.k_m, self.k_K, self.k_lambda, self.alpha], dtype=float)
 
     @classmethod
     def from_array(cls, arr: Sequence[float]) -> "ModelParameters":
-        return cls(k_M=float(arr[0]), k_m=float(arr[1]), k_K=float(arr[2]), alpha=float(arr[3]))
+        return cls(k_M=float(arr[0]), k_m=float(arr[1]), k_K=float(arr[2]), k_lambda=float(arr[3]), alpha=float(arr[4]))
 
 
 @dataclass
@@ -136,6 +138,7 @@ def _predict_single_point(H: float, T: float, params: ModelParameters) -> Tuple[
         K_mesh=np.array([[K_scaled]], dtype=float),
         gamma=GAMMA,
         alpha=params.alpha,
+        lambda_weiss=LAMBDA_WEISS * params.k_lambda,
     )
     (f_lf, tau_lf), (f_hf, tau_hf) = _split_modes(float(f1[0, 0]), float(tau1[0, 0]), float(f2[0, 0]), float(tau2[0, 0]))
     return (f_lf, tau_lf), (f_hf, tau_hf)
@@ -270,7 +273,7 @@ def _predict_phase_diagram(params: ModelParameters, phase_data: PhaseDataset) ->
     M_vals = params.k_M * SUM_MAG_ARRAY[idx].reshape(temp_kelvin.shape)
     K_vals = params.k_K * K_ARRAY[idx].reshape(temp_kelvin.shape)
     H_oe = _to_oe(phase_data.field_mesh)
-    return compute_phases(H_mesh=H_oe, m_mesh=m_vals, M_mesh=M_vals, K_mesh=K_vals)
+    return compute_phases(H_mesh=H_oe, m_mesh=m_vals, M_mesh=M_vals, K_mesh=K_vals, lambda_weiss=LAMBDA_WEISS * params.k_lambda)
 
 
 def _temperature_indices(temp_kelvin: np.ndarray) -> np.ndarray:
@@ -311,8 +314,8 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
     phase_data = _load_phase_dataset(data_root)
-    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
-    bounds = ([0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 0.05])
+    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
+    bounds = ([0.1, 0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
     res0 = _residual_vector(p0, observations, phase_data)
@@ -322,10 +325,11 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations, phase_data), method="trf")
     best = ModelParameters.from_array(solution.x)
     logger.info(
-        "Подбор завершён: k_M=%.5f, k_m=%.5f, k_K=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
+        "Подбор завершён: k_M=%.5f, k_m=%.5f, k_K=%.5f, k_lambda=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
         best.k_M,
         best.k_m,
         best.k_K,
+        best.k_lambda,
         best.alpha,
         solution.cost,
         solution.nfev,
@@ -605,10 +609,11 @@ def main(data_dir: str | None = None) -> None:
     try:
         best, parsed_series, phase_data = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
         logger.info(
-            "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, alpha=%.6f",
+            "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, k_lambda=%.4f, alpha=%.6f",
             best.k_M,
             best.k_m,
             best.k_K,
+            best.k_lambda,
             best.alpha,
         )
 
