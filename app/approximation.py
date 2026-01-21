@@ -315,7 +315,7 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     observations, parsed_series = _build_observations_and_series(data_root)
     phase_data = _load_phase_dataset(data_root)
     p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, LAMBDA_WEISS, ALPHA_DEFAULT], dtype=float)
-    bounds = ([0.1, 0.1, 0.1, 1000.0, 1e-5], [10.0, 10.0, 10.0, 50000.0, 0.05])
+    bounds = ([0.1, 0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
     res0 = _residual_vector(p0, observations, phase_data)
