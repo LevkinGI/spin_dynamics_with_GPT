@@ -23,6 +23,7 @@ T_INIT = 293.0
 
 GAMMA = 1.76e7  # рад/(с·Oe)
 ALPHA_DEFAULT = 1e-3
+LAMBDA_WEISS = 12500.0
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR
@@ -34,13 +35,13 @@ def k_T(temperature: Iterable[float] | float) -> np.ndarray:
     return 0.522 * (T - 370.0) ** 2
 
 
-def chi(m: np.ndarray, M: np.ndarray) -> np.ndarray:
+def chi(m: np.ndarray, M: np.ndarray, *, lambda_weiss: float = LAMBDA_WEISS) -> np.ndarray:
     """Вычисление магнитной восприимчивости."""
     m = np.asarray(m, dtype=float)
     M = np.asarray(M, dtype=float)
     denom = 1.0 - (m**2) / (M**2 + 1e-16)
     denom = np.where(denom == 0, np.nan, denom)
-    return 1.0 / (12500.0 * denom)
+    return 1.0 / (lambda_weiss * denom)
 
 
 # загружаем материалы из файлов
@@ -58,6 +59,7 @@ def compute_frequencies(
     K_mesh: np.ndarray,
     gamma: float = GAMMA,
     alpha: float = ALPHA_DEFAULT,
+    lambda_weiss: float = LAMBDA_WEISS,
 ) -> Tuple[Tuple[np.ndarray, np.ndarray], Tuple[np.ndarray, np.ndarray]]:
     """
     Расчёт частот/затуханий двух мод.
@@ -67,7 +69,7 @@ def compute_frequencies(
     min/max или сортировку по real-части.
     """
     abs_m = np.abs(m_mesh)
-    chi_mesh = chi(m_mesh, M_mesh)
+    chi_mesh = chi(m_mesh, M_mesh, lambda_weiss=lambda_weiss)
 
     w_H = gamma * H_mesh
     w_0_sq = gamma**2 * 2 * K_mesh / chi_mesh
@@ -97,10 +99,17 @@ def compute_frequencies(
     return (f1, tau1), (f2, tau2)
 
 
-def compute_phases(H_mesh: np.ndarray, m_mesh: np.ndarray, M_mesh: np.ndarray, K_mesh: np.ndarray) -> np.ndarray:
+def compute_phases(
+    H_mesh: np.ndarray,
+    m_mesh: np.ndarray,
+    M_mesh: np.ndarray,
+    K_mesh: np.ndarray,
+    *,
+    lambda_weiss: float = LAMBDA_WEISS,
+) -> np.ndarray:
     """Угол theta_0 по исходной модели."""
     abs_m = np.abs(m_mesh)
-    chi_mesh = chi(m_mesh, M_mesh)
+    chi_mesh = chi(m_mesh, M_mesh, lambda_weiss=lambda_weiss)
     m_cr = chi_mesh * H_mesh + (2 * K_mesh) / H_mesh
     theta_0 = np.where(H_mesh == 0, np.nan, np.where(abs_m > m_cr, 0.0, np.arccos(abs_m / m_cr)))
     return theta_0
@@ -120,6 +129,7 @@ __all__ = [
     # константы
     "GAMMA",
     "ALPHA_DEFAULT",
+    "LAMBDA_WEISS",
     # функции модели
     "compute_frequencies",
     "compute_phases",
