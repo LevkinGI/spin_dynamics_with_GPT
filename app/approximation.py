@@ -69,7 +69,7 @@ class ModelParameters:
     k_M: float = 1.0
     k_m: float = 1.0
     k_K: float = 1.0
-    k_lambda: float = LAMBDA_WEISS
+    k_lambda: float = 1.0
     alpha: float = ALPHA_DEFAULT
 
     def as_array(self) -> np.ndarray:
@@ -138,7 +138,7 @@ def _predict_single_point(H: float, T: float, params: ModelParameters) -> Tuple[
         K_mesh=np.array([[K_scaled]], dtype=float),
         gamma=GAMMA,
         alpha=params.alpha,
-        lambda_weiss=params.k_lambda,
+        lambda_weiss=LAMBDA_WEISS * params.k_lambda,
     )
     (f_lf, tau_lf), (f_hf, tau_hf) = _split_modes(float(f1[0, 0]), float(tau1[0, 0]), float(f2[0, 0]), float(tau2[0, 0]))
     return (f_lf, tau_lf), (f_hf, tau_hf)
@@ -273,7 +273,7 @@ def _predict_phase_diagram(params: ModelParameters, phase_data: PhaseDataset) ->
     M_vals = params.k_M * SUM_MAG_ARRAY[idx].reshape(temp_kelvin.shape)
     K_vals = params.k_K * K_ARRAY[idx].reshape(temp_kelvin.shape)
     H_oe = _to_oe(phase_data.field_mesh)
-    return compute_phases(H_mesh=H_oe, m_mesh=m_vals, M_mesh=M_vals, K_mesh=K_vals, lambda_weiss=params.k_lambda)
+    return compute_phases(H_mesh=H_oe, m_mesh=m_vals, M_mesh=M_vals, K_mesh=K_vals, lambda_weiss=LAMBDA_WEISS * params.k_lambda)
 
 
 def _temperature_indices(temp_kelvin: np.ndarray) -> np.ndarray:
@@ -314,7 +314,7 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
     phase_data = _load_phase_dataset(data_root)
-    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, LAMBDA_WEISS, ALPHA_DEFAULT], dtype=float)
+    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
     bounds = ([0.1, 0.1, 0.1, 0.1, 1e-5], [10.0, 10.0, 10.0, 10.0, 0.05])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
