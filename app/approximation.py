@@ -68,7 +68,7 @@ class ModelParameters:
     k_M: float = 1.0
     m_scale: float = 1.0
     k_K: float = 1.0
-    k_lambda: float = 1.0
+    k_lambda: float = 0.4
     alpha: float = ALPHA_DEFAULT
     t_neel: float = 358.0
 
@@ -321,7 +321,7 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
     phase_data = _load_phase_dataset(data_root)
-    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, 1.0, ALPHA_DEFAULT, 358.0], dtype=float)
+    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, 0.4, ALPHA_DEFAULT, 358.0], dtype=float)
     bounds = ([0.9, -100.0, 0.01, 0.01, 1e-5, 350.0], [1.1, 100.0, 100.0, 100.0, 0.05, 370.0])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
