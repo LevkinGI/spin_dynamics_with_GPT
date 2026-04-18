@@ -28,7 +28,6 @@ from .constants import (
     T_VALS,
     compute_phases,
     compute_frequencies,
-    DIFF_MAG_ARRAY,
 )
 from .plotting import PhaseDiagramData, SeriesData, build_summary_figure
 
@@ -67,17 +66,25 @@ def configure_logging() -> None:
 @dataclass
 class ModelParameters:
     k_M: float = 1.0
-    k_m: float = 1.0
+    m_scale: float = 1.0
     k_K: float = 1.0
     k_lambda: float = 1.0
     alpha: float = ALPHA_DEFAULT
+    t_neel: float = 358.0
 
     def as_array(self) -> np.ndarray:
-        return np.array([self.k_M, self.k_m, self.k_K, self.k_lambda, self.alpha], dtype=float)
+        return np.array([self.k_M, self.m_scale, self.k_K, self.k_lambda, self.alpha, self.t_neel], dtype=float)
 
     @classmethod
     def from_array(cls, arr: Sequence[float]) -> "ModelParameters":
-        return cls(k_M=float(arr[0]), k_m=float(arr[1]), k_K=float(arr[2]), k_lambda=float(arr[3]), alpha=float(arr[4]))
+        return cls(
+            k_M=float(arr[0]),
+            m_scale=float(arr[1]),
+            k_K=float(arr[2]),
+            k_lambda=float(arr[3]),
+            alpha=float(arr[4]),
+            t_neel=float(arr[5]),
+        )
 
 
 @dataclass
@@ -125,9 +132,9 @@ def _split_modes(f1: float, tau1: float, f2: float, tau2: float) -> Tuple[Tuple[
 
 def _predict_single_point(H: float, T: float, params: ModelParameters) -> Tuple[Tuple[float, float], Tuple[float, float]]:
     """Расчёт частот и времен затухания для одной точки (H, T). H ожидается в Oe."""
-    m_val, M_val, K_val = _materials_at_temperature(T)
+    m_val, M_val, K_val = _materials_at_temperature(T, params)
 
-    m_scaled = params.k_m * m_val
+    m_scaled = m_val
     M_scaled = params.k_M * M_val
     K_scaled = params.k_K * K_val
 
@@ -268,10 +275,10 @@ def _phase_residuals(params: ModelParameters, phase_data: PhaseDataset) -> list[
 
 def _predict_phase_diagram(params: ModelParameters, phase_data: PhaseDataset) -> np.ndarray:
     temp_kelvin = phase_data.temp_mesh_kelvin
+    m_vals = _m_parabola(temp_kelvin, params.m_scale, params.t_neel)
     idx = _temperature_indices(temp_kelvin)
-    m_vals = params.k_m * DIFF_MAG_ARRAY[idx].reshape(temp_kelvin.shape)
     M_vals = params.k_M * SUM_MAG_ARRAY[idx].reshape(temp_kelvin.shape)
-    K_vals = params.k_K * K_ARRAY[idx].reshape(temp_kelvin.shape)
+    K_vals = params.k_K * _k_anisotropy(temp_kelvin, params.t_neel)
     H_oe = _to_oe(phase_data.field_mesh)
     return compute_phases(H_mesh=H_oe, m_mesh=m_vals, M_mesh=M_vals, K_mesh=K_vals, lambda_weiss=LAMBDA_WEISS * params.k_lambda)
 
@@ -314,8 +321,8 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     data_root = data_dir or DATA_DIR
     observations, parsed_series = _build_observations_and_series(data_root)
     phase_data = _load_phase_dataset(data_root)
-    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, 1.0, ALPHA_DEFAULT], dtype=float)
-    bounds = ([0.01, 0.01, 0.01, 0.01, 1e-5], [100.0, 100.0, 100.0, 100.0, 0.05])
+    p0 = initial.as_array() if initial else np.array([1.0, 1.0, 1.0, 1.0, ALPHA_DEFAULT, 358.0], dtype=float)
+    bounds = ([0.01, -100.0, 0.01, 0.01, 1e-5, 350.0], [100.0, 100.0, 100.0, 100.0, 0.05, 370.0])
 
     logger.info("Запуск подбора параметров: p0=%s", p0)
     res0 = _residual_vector(p0, observations, phase_data)
@@ -325,12 +332,13 @@ def fit_parameters(initial: ModelParameters | None = None, data_dir: Path | None
     solution = least_squares(_residual_vector, p0, bounds=bounds, args=(observations, phase_data), method="trf")
     best = ModelParameters.from_array(solution.x)
     logger.info(
-        "Подбор завершён: k_M=%.5f, k_m=%.5f, k_K=%.5f, k_lambda=%.5f, alpha=%.6f, cost=%.4e, итераций=%d",
+        "Подбор завершён: k_M=%.5f, m_scale=%.5f, k_K=%.5f, k_lambda=%.5f, alpha=%.6f, Tn=%.1f K, cost=%.4e, итераций=%d",
         best.k_M,
-        best.k_m,
+        best.m_scale,
         best.k_K,
         best.k_lambda,
         best.alpha,
+        best.t_neel,
         solution.cost,
         solution.nfev,
     )
@@ -592,7 +600,19 @@ def _evaluate_axis(H_values: Iterable[float], T_values: Iterable[float], params:
     return (np.asarray(lf_freq), np.asarray(hf_freq), np.asarray(lf_tau), np.asarray(hf_tau))
 
 
-def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
+def _m_parabola(temperature: float | np.ndarray, m_scale: float, t_neel: float, t_m: float = 333.0) -> np.ndarray:
+    """m(T) = m_scale * (T - Tm) * (T - Tn), где Tm и Tn — нули параболы."""
+    temp = np.asarray(temperature, dtype=float)
+    return m_scale * (temp - t_m) * (temp - t_neel)
+
+
+def _k_anisotropy(temperature: float | np.ndarray, t_neel: float, k0: float = 0.522) -> np.ndarray:
+    """K(T) = K0 * (T - Tn)^2."""
+    temp = np.asarray(temperature, dtype=float)
+    return k0 * (temp - t_neel) ** 2
+
+
+def _materials_at_temperature(temperature: float, params: ModelParameters) -> Tuple[float, float, float]:
     """
     Возвращает (m, M, K) для заданной температуры.
 
@@ -601,7 +621,8 @@ def _materials_at_temperature(temperature: float) -> Tuple[float, float, float]:
     idx = np.argmin(np.abs(T_VALS - temperature))
     if not np.isclose(T_VALS[idx], temperature, atol=1e-6):
         logger.warning("Температура %.3f K отсутствует в сетке T_VALS, взят ближайший узел %.3f K", temperature, T_VALS[idx])
-    return float(DIFF_MAG_ARRAY[idx]), float(SUM_MAG_ARRAY[idx]), float(K_ARRAY[idx])
+    temp_node = float(T_VALS[idx])
+    return float(_m_parabola(temp_node, params.m_scale, params.t_neel)), float(SUM_MAG_ARRAY[idx]), float(_k_anisotropy(temp_node, params.t_neel))
 
 
 def main(data_dir: str | None = None) -> None:
@@ -609,12 +630,13 @@ def main(data_dir: str | None = None) -> None:
     try:
         best, parsed_series, phase_data = fit_parameters(data_dir=Path(data_dir) if data_dir else None)
         logger.info(
-            "Оптимальные параметры: k_M=%.4f, k_m=%.4f, k_K=%.4f, k_lambda=%.4f, alpha=%.6f",
+            "Оптимальные параметры: k_M=%.4f, m_scale=%.4f, k_K=%.4f, k_lambda=%.4f, alpha=%.6f, Tn=%.1f K",
             best.k_M,
-            best.k_m,
+            best.m_scale,
             best.k_K,
             best.k_lambda,
             best.alpha,
+            best.t_neel,
         )
 
         series = _prepare_series(best, parsed_series)
